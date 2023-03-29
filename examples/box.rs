@@ -19,7 +19,7 @@ fn main() -> Result<(), std::io::Error> {
                 Box::new(Texture::Solid(srgb_to_linear(0, 0, 230))),
                 2.42,
             ),
-            0.001,
+            0.01,
         ),
     );
 
@@ -28,17 +28,17 @@ fn main() -> Result<(), std::io::Error> {
         0.2,
         Material::Mirror,
     ));
-
+/*
     scene.add(Sphere::new(
         DVec3::new(0.3, -0.8, -1.2),
         0.1,
         Material::transparent(Texture::Solid(srgb_to_linear(255, 255, 255)), 1.5, 0.001),
-    ));
+    ));*/
 
     scene.add(
         Cube::new(Material::specular(
             Texture::Solid(srgb_to_linear(0, 230, 0)),
-            0.07,
+            0.1,
         ))
         .rotate_y(PI / 10.0)
         .scale(0.2, 0.4, 0.2)

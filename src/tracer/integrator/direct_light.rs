@@ -15,7 +15,6 @@ pub fn integrate(scene: &Scene, ro: &Ray) -> DVec3 {
                         let no = ho.norm;
                         let ri = bsdf.sample_ray(rand_utils::unit_square());
                         let wi = ri.dir;
-                        println!("{}", wi);
 
                         // correct?
                         let cos_theta = if material.is_transparent() {

@@ -144,7 +144,6 @@ impl BSDF for Microfacet_BSDF {
 
             self.refract(eta_ratio, wh)
         };
-
         let wi = self.onb.to_world(wi);
 
         Ray::new(self.xo, wi)

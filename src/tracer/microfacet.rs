@@ -275,11 +275,13 @@ impl MfDistribution {
                 let wm = hemi_basis.to_world(wm);
 
                 // move back to ellipsoid
-                DVec3::new(
+                let n = DVec3::new(
                     roughness * wm.x,
                     roughness * wm.y,
                     wm.z.max(0.0)
-                ).normalize()
+                ).normalize();
+
+                n
             }
             Self::Beckmann(cfg) => {
                 let roughness2 = cfg.roughness * cfg.roughness;
