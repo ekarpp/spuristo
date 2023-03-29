@@ -2,6 +2,7 @@ use crate::rand_utils;
 use crate::samplers::JitteredSampler;
 use crate::tracer::hit::Hit;
 use crate::tracer::pdfs::{ObjectPdf, Pdf};
+use crate::tracer::bsdf::{BSDF, Mirror_BSDF, Microfacet_BSDF};
 use crate::tracer::ray::Ray;
 use crate::tracer::scene::Scene;
 use glam::{DVec2, DVec3};
@@ -55,7 +56,7 @@ impl Integrator {
 }
 
 /// Shoots a shadow ray towards random light from `ho`.
-fn shadow_ray(scene: &Scene, ro: &Ray, ho: &Hit, pdf_scatter: &dyn Pdf, rand_sq: DVec2) -> DVec3 {
+fn shadow_ray(scene: &Scene, ro: &Ray, ho: &Hit, bsdf: &dyn BSDF, rand_sq: DVec2) -> DVec3 {
     let material = ho.object.material();
 
     if !material.is_diffuse() {
@@ -73,14 +74,14 @@ fn shadow_ray(scene: &Scene, ro: &Ray, ho: &Hit, pdf_scatter: &dyn Pdf, rand_sq:
             None => DVec3::ZERO,
             Some(_) => {
                 let p_light = pdf_light.value_for(&ri);
-                let p_scatter = pdf_scatter.value_for(&ri);
+                let p_scatter = bsdf.prob_for(&ri);
 
                 let weight = p_light * p_light
                     / (p_light * p_light + p_scatter * p_scatter);
 
-                material.bsdf_f(ro, &ri, no)
+                bsdf.eval(&ri)
                     * no.dot(wi).abs()
-                    * weight
+                    //* weight
                     / p_light
             }
         }

@@ -1,5 +1,6 @@
 use glam::{DVec2, DVec3};
 use std::f64::consts::PI;
+use crate::EPSILON;
 use crate::tracer::onb::Onb;
 
 /// Configurable parameters for a microsurface
@@ -114,6 +115,7 @@ impl MfDistribution {
     /// Probability to do importance sampling from NDF. Estimate based on
     /// the Fresnel term.
     pub fn probability_ndf_sample(&self, albedo: DVec3) -> f64 {
+        return 1.0;
         let cfg = self.get_config();
 
         let f0 = (cfg.refraction_idx - 1.0) / (cfg.refraction_idx + 1.0);
@@ -147,40 +149,32 @@ impl MfDistribution {
     /// * GGX - α^2 / (π * (cos^4(θ) * (α^2 - 1.0) + 1.0)^2)
     ///
     /// # Arguments
-    /// * `wh` - The half vector of `wo` and `wi`
-    /// * `no` - Surface normal at the point of impact
-    pub fn d(&self, wh: DVec3, no: DVec3) -> f64 {
+    /// * `wh` - The half vector of `wo` and `wi` in tangent space
+    pub fn d(&self, wh: DVec3) -> f64 {
         match self {
             Self::Ggx(cfg) => {
-                let cos_theta2 = wh.dot(no).powi(2);
-                let roughness2 = cfg.roughness * cfg.roughness;
+                let cos_theta2 = wh.z.powi(2);
+                if cos_theta2 < EPSILON {
+                    0.0
+                } else {
+                    let roughness2 = cfg.roughness * cfg.roughness;
 
-                roughness2 / (PI * (cos_theta2 * (roughness2 - 1.0) + 1.0).powi(2))
+                    roughness2 / (PI * (cos_theta2 * (roughness2 - 1.0) + 1.0).powi(2))
+                }
             }
             Self::Beckmann(cfg) => {
-                let roughness2 = cfg.roughness * cfg.roughness;
-                let cos_theta2 = wh.dot(no).powi(2);
-                let tan_theta2 = (1.0 - cos_theta2) / cos_theta2;
+                let cos_theta2 = wh.z.powi(2);
 
-                (-tan_theta2 / roughness2).exp() / (PI * roughness2 * cos_theta2.powi(2))
+                if cos_theta2 < EPSILON {
+                    0.0
+                } else {
+                    let roughness2 = cfg.roughness * cfg.roughness;
+                    let tan_theta2 = (1.0 - cos_theta2) / cos_theta2;
+
+                    (-tan_theta2 / roughness2).exp() / (PI * roughness2 * cos_theta2.powi(2))
+                }
             }
         }
-    }
-
-    /// Shadow-masking term. Used to make sure that only microfacets that are
-    /// visible from `wo` direction are considered. Uses the method described
-    /// in Chapter 8.4.3 of PBR due to Heitz et al. 2013.
-    ///
-    /// # Arguments
-    /// * `wo` - Direction of ray towards the point of impact
-    /// * `wi` - Direction of ray away from the point of impact
-    /// * `no` - Surface normal at the point of impact
-    pub fn g(&self, wo: DVec3, wi: DVec3, no: DVec3) -> f64 {
-        1.0 / (1.0 + self.lambda(wo, no) + self.lambda(wi, no))
-    }
-
-    pub fn g1(&self, v: DVec3, no: DVec3) -> f64 {
-        1.0 / (1.0 + self.lambda(v, no))
     }
 
     /// Fresnel term with Schlick's approximation
@@ -195,23 +189,37 @@ impl MfDistribution {
         f0 + (DVec3::ONE - f0) * (1.0 - wo_dot_wh).powi(5)
     }
 
+    /// Shadow-masking term. Used to make sure that only microfacets that are
+    /// visible from `wo` direction are considered. Uses the method described
+    /// in Chapter 8.4.3 of PBR due to Heitz et al. 2013.
+    ///
+    /// # Arguments
+    /// * `wo` - Direction of ray towards the point of impact in tangent space
+    /// * `wi` - Direction of ray away from the point of impact in tangent space
+    pub fn g(&self, wo: DVec3, wi: DVec3) -> f64 {
+        1.0 / (1.0 + self.lambda(wo) + self.lambda(wi))
+    }
+
+    pub fn g1(&self, v: DVec3) -> f64 {
+        1.0 / (1.0 + self.lambda(v))
+    }
+
     /// Lambda function used in the definition of the shadow-masking term.
     /// Beckmann with polynomial approximation and GGX exactly. PBR Chapter 8.4.3
     ///
     /// # Arguments
-    /// * `w` - Direction to consider
-    /// * `no` - Macrosurface normal
-    fn lambda(&self, w: DVec3, no: DVec3) -> f64 {
+    /// * `w` - Direction to consider, in tanget space
+    fn lambda(&self, w: DVec3) -> f64 {
         match self {
             Self::Ggx(cfg) => {
-                let w_dot_no2 = w.dot(no).powi(2);
+                let w_dot_no2 = w.z.powi(2);
                 let tan_w = (1.0 - w_dot_no2) / w_dot_no2;
                 let roughness2 = cfg.roughness * cfg.roughness;
 
                 ((1.0 + roughness2 * tan_w).sqrt() - 1.0) / 2.0
             }
             Self::Beckmann(cfg) => {
-                let w_dot_no2 = w.dot(no).powi(2);
+                let w_dot_no2 = w.z.powi(2);
                 let tan_w = ((1.0 - w_dot_no2) / w_dot_no2).abs();
                 let a = 1.0 / (cfg.roughness * tan_w);
 
@@ -225,7 +233,7 @@ impl MfDistribution {
     }
 
     /// Sampling microfacet normals per distribution for importance sampling.
-    /// `v` in shading space.
+    /// `v` in tangent space.
     pub fn sample_normal(&self, v: DVec3, rand_sq: DVec2) -> DVec3 {
         match self {
             Self::Ggx(cfg) => {

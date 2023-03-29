@@ -8,6 +8,7 @@ pub use texture::Texture;
 
 /// Different BSDFs.
 mod bxdfs;
+mod bsdf;
 /// Abstraction for a camera
 mod camera;
 /// Abstraction for a hit between a ray and an object.

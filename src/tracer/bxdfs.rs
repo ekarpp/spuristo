@@ -1,10 +1,10 @@
 use crate::tracer::hit::Hit;
 use crate::tracer::microfacet::MfDistribution;
-use crate::tracer::pdfs::{DeltaPdf, IsotropicPdf, MfdPdf, Pdf};
+//use crate::tracer::pdfs::{DeltaPdf, IsotropicPdf, MfdPdf, Pdf};
 use crate::tracer::ray::Ray;
 use glam::DVec3;
 use std::f64::consts::PI;
-
+/*
 /// BSDF for microfacet. Works for transparent and non-transparent materials.
 pub fn bsdf_microfacet(ro: &Ray, ri: &Ray, no: DVec3, color: DVec3, mfd: &MfDistribution) -> DVec3 {
     let v = -ro.dir;
@@ -129,3 +129,4 @@ pub fn refract(eta_ratio: f64, v: DVec3, no: DVec3) -> DVec3 {
 
     -v * eta_ratio + (eta_ratio * cos_to - cos_ti) * no
 }
+*/

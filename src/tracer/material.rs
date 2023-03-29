@@ -1,10 +1,10 @@
-use crate::tracer::bxdfs;
-use crate::tracer::hit::Hit;
-use crate::tracer::microfacet::MfDistribution;
-use crate::tracer::pdfs::Pdf;
-use crate::tracer::ray::Ray;
-use crate::tracer::texture::Texture;
 use glam::DVec3;
+use crate::tracer::bsdf::{BSDF, Mirror_BSDF, Microfacet_BSDF};
+use crate::tracer::hit::Hit;
+use crate::tracer::ray::Ray;
+use crate::tracer::bxdfs;
+use crate::tracer::texture::Texture;
+use crate::tracer::microfacet::MfDistribution;
 
 /// Describes which material an object is made out of
 pub enum Material {
@@ -21,6 +21,7 @@ pub enum Material {
 }
 
 impl Material {
+
     /// Metallic microfacet material
     pub fn metal(texture: Texture, roughness: f64) -> Self {
         Self::Microfacet(texture, MfDistribution::metallic(roughness))
@@ -38,7 +39,10 @@ impl Material {
 
     /// Transparent material
     pub fn transparent(texture: Texture, rfrct_idx: f64, roughness: f64) -> Self {
-        Self::Microfacet(texture, MfDistribution::transparent(rfrct_idx, roughness))
+        Self::Microfacet(
+            texture,
+            MfDistribution::transparent(rfrct_idx, roughness)
+        )
     }
 
     /// How specular is the material? 1.0 fully, 0.0 none
@@ -72,27 +76,31 @@ impl Material {
             _ => DVec3::ZERO,
         }
     }
-
+/*
     /// What is the color at `ri.origin`?
-    pub fn bsdf_f(&self, ro: &Ray, ri: &Ray, no: DVec3) -> DVec3 {
-        let xo = ri.origin;
+    /// Returns BSDF for `ro` at `ho`
+    pub fn bsdf(&self, ro: &Ray, ho: &Hit) -> DVec3 {
+        let xo = ho.p;
         match self {
             Self::Isotropic(t) => t.albedo_at(xo),
             Self::Mirror => DVec3::ONE,
-            Self::Microfacet(t, mfd) => bxdfs::bsdf_microfacet(ro, ri, no, t.albedo_at(xo), mfd),
+            Self::Microfacet(t, mfd) => {
+                bxdfs::bsdf_microfacet(ro, ri, no, t.albedo_at(xo), mfd)
+            }
             _ => DVec3::ZERO,
         }
     }
-
-    /// How does `r` get scattered at `h`?
-    pub fn bsdf_pdf(&self, ho: &Hit, ro: &Ray) -> Option<Box<dyn Pdf>> {
+*/
+    /// Returns the BSDF for `ro` at `ho`
+    pub fn bsdf(&self, ro: &Ray, ho: &Hit) -> Option<Box<dyn BSDF>> {
         match self {
-            Self::Mirror => bxdfs::brdf_mirror_pdf(ho, ro),
-            Self::Microfacet(t, mfd) => {
+            Self::Mirror => Some( Box::new(Mirror_BSDF::new(ro, ho)) ),
+            Self::Microfacet(tex, mfd) => {
+                let no = ho.norm;
                 let xo = ho.p;
-                bxdfs::bsdf_microfacet_pdf(ho, ro, t.albedo_at(xo), mfd)
+                let albedo = tex.albedo_at(xo);
+                Some( Box::new(Microfacet_BSDF::new(ro, ho, *mfd, albedo)) )
             }
-            Self::Isotropic(_) => bxdfs::bsdf_isotropic_pdf(ho, ro),
             _ => None,
         }
     }

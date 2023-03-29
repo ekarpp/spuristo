@@ -6,12 +6,12 @@ pub fn integrate(scene: &Scene, ro: &Ray, last_specularity: f64) -> DVec3 {
         Some(ho) => {
             let material = ho.object.material();
 
-            match material.bsdf_pdf(&ho, ro) {
+            match material.bsdf(ro, &ho) {
                 None => last_specularity * material.emit(&ho),
-                Some(scatter_pdf) => {
+                Some(bsdf) => {
                     // jittered sampler
                     let shadow = JitteredSampler::new(SHADOW_SPLITS)
-                        .map(|rand_sq| shadow_ray(scene, ro, &ho, scatter_pdf.as_ref(), rand_sq))
+                        .map(|rand_sq| shadow_ray(scene, ro, &ho, bsdf.as_ref(), rand_sq))
                         .sum::<DVec3>()
                         / SHADOW_SPLITS as f64;
 
@@ -20,9 +20,9 @@ pub fn integrate(scene: &Scene, ro: &Ray, last_specularity: f64) -> DVec3 {
                     }
 
                     let no = ho.norm;
-                    let ri = scatter_pdf.sample_ray(rand_utils::unit_square());
+                    let ri = bsdf.sample_ray(rand_utils::unit_square());
                     let wi = ri.dir;
-                    let p_scatter = scatter_pdf.value_for(&ri);
+                    let p_scatter = bsdf.prob_for(&ri);
 
                     // scatter with 0 probability
                     if p_scatter.is_nan() || p_scatter < 0.0001 {
@@ -36,11 +36,10 @@ pub fn integrate(scene: &Scene, ro: &Ray, last_specularity: f64) -> DVec3 {
                         no.dot(wi).abs()
                     };
 
-                    shadow
-                        + material.bsdf_f(ro, &ri, no)
-                            * cos_theta
-                            * integrate(scene, &ri, material.specularity())
-                            / (p_scatter * (1.0 - PATH_TRACE_RR))
+                    shadow + bsdf.eval(&ri)
+                        * cos_theta
+                        * integrate(scene, &ri, material.specularity())
+                        / (p_scatter * (1.0 - PATH_TRACE_RR))
                 }
             }
         }
