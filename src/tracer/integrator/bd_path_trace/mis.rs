@@ -22,8 +22,93 @@ pub fn mis_weight(
     };
 
     // max(1) is lazy... if s == 0 we never call ls anyways. TODO fix later
+    let mut ls: Option<Vertex> = None;
+    let mut ls_m: Option<Vertex> = None;
+    let mut ct: Option<Vertex> = None;
+    let mut ct_m: Option<Vertex> = None;
+
+    // if (s == 1) a1 = { qs, sampled };
+    if s == 1 {
+        ls = sampled_vertex;
+    // else if (t == 1) a1 = { pt, sampled };
+    } else if t == 1 {
+        ct = sampled_vertex;
+    }
+
+    // *qs = s > 0 ? &lightVertices[s - 1]  : nullptr;
+    if s > 1 {
+        ls = Some(light_path[s - 1].copy());
+    }
+    // *pt = t > 0 ? &cameraVertices[t - 1] : nullptr;
+    if t > 1 {
+        ct = Some(camera_path[t - 1].copy());
+    }
+
+//    ls = ls.map(|v| v.delta = true; v);
+//    ct = ct.map(|v| v.delta = true; v);
+    // Update reverse density of vertex p_{t - 1}
+    if let Some(ref mut ct) = ct {
+        ct.delta = false;
+
+        if s == 0 {
+            ct.pdf_bck = ct.pdf_light_origin();
+        } else if let Some(ref ls) = ls {
+            let pdf = if s == 1 {
+                ls.pdf_light_leaving(ct)
+            } else {
+                let ls_m = &light_path[s - 2];
+                ls.pdf_area(ls_m, ct, Transport::Importance)
+            };
+
+            ct.pdf_bck = pdf;
+        };
+    }
+
+    // update reverse density of vertex $p_{t-2}$
+    if let Some(ref ct) = ct && t > 1 {
+        // ct_m, but issues with shadowing
+        let curr = &camera_path[t - 2];
+
+        let pdf = if s == 0 {
+            ct.pdf_light_leaving(curr)
+        } else {
+            ct.pdf_area(ls.as_ref().unwrap(), curr, Transport::Importance)
+        };
+
+        let mut curr = curr.copy();
+        curr.pdf_bck = pdf;
+        ct_m = Some(curr);
+    }
+
+    // update reverse density of vertex p_{s-1}
+    if let Some(ref mut ls) = ls && let Some(ref ct) = ct {
+        let pdf = if let Some(ref ct_m) = ct_m {
+            ct.pdf_area(ct_m, ls, Transport::Radiance)
+        } else {
+            // should call camera.pdf here
+            1.0
+        };
+
+        ls.pdf_bck = pdf;
+        ls.delta = false;
+    }
+
+    // update reverse density of vertex p_{s-2}
+    if let Some(ref ls) = ls && let Some(ref ct) = ct && s > 1 {
+        let curr = &light_path[s - 2];
+        let pdf = ls.pdf_area(ct, curr, Transport::Radiance);
+        let mut curr = curr.copy();
+        curr.pdf_bck = pdf;
+        ls_m = Some(curr);
+    }
+
+
+    /*
+    // max(1) is lazy... if s == 0 we never call ls anyways. TODO fix later
     let ls = if s != 1 { &light_path[s.max(1) - 1] } else { sampled_vertex.as_ref().unwrap() };
     let ct = if t != 1 { &camera_path[t - 1] } else { sampled_vertex.as_ref().unwrap() };
+    */
+
 
     let mut sum_ri = 0.0;
     let mut ri = 1.0;

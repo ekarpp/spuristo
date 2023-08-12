@@ -6,9 +6,30 @@ pub struct Vertex<'a> {
     pub gathered: DVec3,
     pub pdf_fwd: f64,
     pub pdf_bck: f64,
+    pub delta: bool,
 }
 
 impl<'a> Vertex<'a> {
+    pub fn copy(&self) -> Self {
+        let h = Hit::new(
+            0.0,
+            &Material::Blank,
+            DVec3::NEG_X,
+            DVec3::ZERO,
+            DVec3::ZERO,
+            DVec3::X,
+            DVec3::X,
+            DVec2::X,
+        ).unwrap();
+        Self {
+            h,
+            gathered: self.gathered,
+            pdf_fwd: self.pdf_fwd,
+            pdf_bck: self.pdf_bck,
+            delta: self.delta,
+        }
+    }
+
     /// Camera vertex
     pub fn camera(xo: DVec3, gathered: DVec3) -> Self {
         let h = Hit::new(
@@ -26,6 +47,7 @@ impl<'a> Vertex<'a> {
             gathered,
             pdf_bck: 1.0,
             pdf_fwd: 0.0,
+            delta: true,
         }
     }
 
@@ -38,6 +60,8 @@ impl<'a> Vertex<'a> {
             pdf_bck,
             // this might cause issues later on (if area is zero, point light?)...
             pdf_fwd: 1.0 / light.area(),
+            // same as above ^
+            delta: false,
         }
     }
 
@@ -63,6 +87,7 @@ impl<'a> Vertex<'a> {
             gathered,
             pdf_fwd,
             pdf_bck: 0.0,
+            delta: h.material.is_delta(),
         }
     }
 
@@ -133,26 +158,49 @@ impl<'a> Vertex<'a> {
 
     /// PDF to sample direction to `next` from `curr` w.r.t. surface area measure
     pub fn pdf_area(&self, prev: &Vertex, next: &Vertex, mode: Transport) -> f64 {
-        if self.is_delta() {
-            return 0.0;
-        }
-
         let ho = &self.h;
+        // prev
         let xo = prev.h.p;
+        // curr
         let xi = ho.p;
+        // prev -> curr
         let wo = xi - xo;
         let ro = Ray::new(xo, wo);
+        // next
         let xii = next.h.p;
+        // curr -> next
         let wi = xii - xi;
         let ri = Ray::new(xi, wi);
         // normalized
         let wi = ri.dir;
-        let sa = match self.material().bsdf_pdf(ho, &ro) {
+        let angle_pdf = match self.material().bsdf_pdf(ho, &ro) {
             None => 0.0,
             Some(pdf) => pdf.value_for(&ri, matches!(mode, Transport::Importance))
         };
         let ng = next.h.ng;
 
-        sa * wi.dot(ng).abs() / xi.distance_squared(xii)
+        angle_pdf * wi.dot(ng).abs() / xi.distance_squared(xii)
+    }
+
+    pub fn pdf_light_origin(&self) -> f64 {
+        self.h.light.map_or(0.0, |light| 1.0 / light.area())
+    }
+
+    pub fn pdf_light_leaving(&self, next: &Vertex) -> f64 {
+        if let Some(ref light) = self.h.light {
+            let xo = self.h.p;
+            let xi = next.h.p;
+            let wi = xi - xo;
+            let ri = Ray::new(xo, wi);
+            // normalized
+            let wi = ri.dir;
+            let ng = self.h.ng;
+            let (_, pdf_dir) = light.sample_leaving_pdf(&ri, ng);
+            let ng = next.h.ng;
+            // convert solid angle to area
+            pdf_dir * wi.dot(ng).abs() / xo.distance_squared(xi)
+        } else {
+            0.0
+        }
     }
 }

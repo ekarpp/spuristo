@@ -106,4 +106,9 @@ impl<'a> Hit<'a> {
     pub fn is_light(&self) -> bool {
         matches!(self.material, Material::Light(..))
     }
+
+    /// Are we on delta material?
+    pub fn is_delta(&self) -> bool {
+        self.material.is_delta()
+    }
 }
